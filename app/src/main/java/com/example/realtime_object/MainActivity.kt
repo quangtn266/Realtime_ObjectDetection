@@ -3,54 +3,72 @@ package com.example.realtime_object
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Camera
-import android.graphics.SurfaceTexture
+import android.graphics.*
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.view.Surface
 import android.view.TextureView
+import android.widget.ImageView
+import androidx.core.content.ContextCompat
+import com.example.realtime_object.ml.SsdMobilenetV11Metadata1
+import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import org.tensorflow.lite.support.common.FileUtil
 import androidx.activity.ComponentActivity
+
+/*import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import android.view.Surface
-import android.widget.ImageView
+
+
+import androidx.compose.foundation.Canvas
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.content.ContextCompat
-import com.example.realtime_object.ui.theme.Realtime_objectTheme
+
+import com.example.realtime_object.ml.SsdMobilenetV11Metadata1
+import com.example.realtime_object.ui.theme.Realtime_objectTheme */
+
 
 class MainActivity : ComponentActivity() {
 
+    lateinit var labels:List<String>
+    var colors = listOf<Int>(
+        Color.BLUE, Color.GREEN, Color.RED, Color.CYAN, Color.GRAY, Color.BLACK,
+        Color.DKGRAY, Color.MAGENTA, Color.YELLOW, Color.RED
+    )
+    val paint = Paint()
+    lateinit var imageProcessor: ImageProcessor
     lateinit var bitmap: Bitmap
-    lateinit var ImnageView: ImageView
+    lateinit var imageView: ImageView
     lateinit var cameraDevice: CameraDevice
     lateinit var handler: Handler
     lateinit var cameraManager: CameraManager
     lateinit var textureView: TextureView
+    lateinit var model: SsdMobilenetV11Metadata1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        get_permission()
-  /*      setContent {
-            Realtime_objectTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Greeting("Android")
-                }
-            }
-        }*/
-
         setContentView(R.layout.activity_main)
+        get_permission()
 
+        labels = FileUtil.loadLabels(this, "labels.txt")
+        imageProcessor = ImageProcessor.Builder().add(ResizeOp(300, 300, ResizeOp.ResizeMethod.BILINEAR)).build()
+        model = SsdMobilenetV11Metadata1.newInstance(this)
         val handlerThread = HandlerThread("videoThread")
+        handlerThread.start()
         handler = Handler(handlerThread.looper)
+
+        imageView = findViewById(R.id.imageView)
 
         textureView = findViewById(R.id.textureView)
         textureView.surfaceTextureListener = object:TextureView.SurfaceTextureListener{
@@ -74,12 +92,48 @@ class MainActivity : ComponentActivity() {
                 return false
             }
 
-            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
+            override fun onSurfaceTextureUpdated(p0: SurfaceTexture) {
+                bitmap = textureView.bitmap!!
+                var image = TensorImage.fromBitmap(bitmap)
+                image = imageProcessor.process(image)
+
+                val outputs = model.process(image)
+                val locations = outputs.locationsAsTensorBuffer.floatArray
+                val classes = outputs.classesAsTensorBuffer.floatArray
+                val scores = outputs.scoresAsTensorBuffer.floatArray
+                val numberOfDetections = outputs.numberOfDetectionsAsTensorBuffer.floatArray
+
+                var mutable = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+                val canvas = Canvas(mutable)
+
+                val h = mutable.height
+                val w = mutable.width
+                paint.textSize = h/15f
+                paint.strokeWidth = h/85f
+                var x = 0
+                scores.forEachIndexed { index, fl ->
+                    x = index
+                    x *= 4
+                    if(fl > 0.5){
+                        paint.setColor(colors.get(index))
+                        paint.style = Paint.Style.STROKE
+                        canvas.drawRect(RectF(locations.get(x+1)*w, locations.get(x)*h, locations.get(x+3)*w, locations.get(x+2)*h), paint)
+                        paint.style = Paint.Style.FILL
+                        canvas.drawText(labels.get(classes.get(index).toInt())+" "+fl.toString(), locations.get(x+1)*w, locations.get(x)*h, paint)
+                    }
+                }
+
+                imageView.setImageBitmap(mutable)
 
             }
         }
 
         cameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        model.close()
     }
 
     @SuppressLint("MissingPermission")
@@ -119,17 +173,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun onRequestPersmissionResult(
+    override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
-    ){
+    ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if(grantResults[0] != PackageManager.PERMISSION_GRANTED)
+        if(grantResults[0] != PackageManager.PERMISSION_GRANTED){
             get_permission()
+        }
     }
 }
 
+/*
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
     Text(
@@ -144,4 +200,4 @@ fun GreetingPreview() {
     Realtime_objectTheme {
         Greeting("Android")
     }
-}
+}*/
