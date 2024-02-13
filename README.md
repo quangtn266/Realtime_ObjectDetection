@@ -9,3 +9,10 @@ In the app, I already run the app on Samsung galaxy A21s. To pair Android Studio
 2. After finishing pairing, you will see the phone name in Android studio, and you can start running the application.
 
    <img width="326" alt="image" src="https://github.com/quangtn266/Realtime_ObjectDetection/assets/50879191/903eb9a1-9c98-42fe-aa1f-38d7439b8bd3">
+
+
+# Result
+
+https://github.com/quangtn266/Realtime_ObjectDetection/assets/50879191/b2140200-e791-4d9c-b210-1d027fb0d747
+
+
